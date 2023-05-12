@@ -91,7 +91,7 @@ Point rotateBy(const Point2d& inPoint, const Mat& rotated_matrix)
 int main(int argc, char** argv)
 {
     //![load]
-    const char* filename = argc >=2 ? argv[1] : "/home/user/CLionProjects/realsense-opencv/image/box12.jpg";
+    const char* filename = argc >=2 ? argv[1] : "/home/user/CLionProjects/realsense-opencv/image/box3.jpg";
 
     // Loads an image
     Mat src = imread( samples::findFile( filename ), IMREAD_COLOR );
@@ -162,7 +162,7 @@ int main(int argc, char** argv)
     std::map<int, int> angle_count_map;
 
     // we rotate 360 degree, each time 0.5 degree
-    for(int angle=0; angle< 720; angle++){
+    for(int angle=0; angle< 360; angle++){
         // using getRotationMatrix2D() to get the rotation matrix
         Mat rotation_matrix = getRotationMatrix2D(center_img, angle/2.0, 1.0);
         // get the first hough circles.
@@ -392,14 +392,18 @@ int main(int argc, char** argv)
         rotated_image_opt_p = rotated_image_opt;
     }
     // display the instruction of rotation.
-    double real_rotation =  angle_opt/2.0;
+    double real_rotation =  min_distance_height < min_distance_width ? angle_opt/2.0+90: angle_opt/2.0;
+    if(real_rotation > 360){
+        real_rotation -= 360;
+    }
+
     std::cout << "real rotate angle: clock_wise "<< (real_rotation> 180? 360-real_rotation: -real_rotation) << "°" << std::endl;
 
     // display the correct image.
     Size newSize(src.cols/5, src.rows/5);
     resize(rotated_image_opt_p, rotated_image_opt_p, newSize);
 
-    imshow("Rotated image", rotated_image_opt_p);
+    imshow("Rotated image by clockwise of "+ std::to_string((real_rotation> 180? 360-real_rotation: -real_rotation) )+ "°" , rotated_image_opt_p);
     //![display]
     waitKey();
     return EXIT_SUCCESS;
