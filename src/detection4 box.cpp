@@ -45,6 +45,7 @@ double PointToSegDist(Point P_i, Point P_j, Point Q)
     double py = y1 + (y2 - y1) * r;
     return  std::sqrt((x - px) * (x - px) + (py - y) * (py - y));
 }
+
 // detect whether a point q is located exactly on the edge of the rectangle (x_min-y_min, x_max-y_max)
 bool onRectangle(Point x_min_y_min, Point x_max_y_max, Point Q){
     // point Q does not on four lines of a rectangle, then return false.
@@ -75,23 +76,36 @@ int onRectangleW(Point x_min_y_min, Point x_max_y_max, Point Q, double distance_
 
 // suppose that rotated matrix is 2x3
 // get the rotated point of the point inPoint, by the rotated matrix
+// https://theailearner.com/tag/cv2-getrotationmatrix2d/
+
+//Point rotateBy(const Point2d& inPoint, const Mat& rotated_matrix)
+//{
+//    Point outPoint;
+//    vector<double> point{inPoint.x, inPoint.y, 1};
+//    Mat my_m = Mat(point);
+//    Mat res = rotated_matrix* my_m;
+//    outPoint.x= int(res.at<double>(0, 0));
+//    outPoint.y= int(res.at<double>(0, 1));
+//    return outPoint;
+//}
+
 Point rotateBy(const Point2d& inPoint, const Mat& rotated_matrix)
 {
     Point outPoint;
-    vector<double> point{inPoint.x, inPoint.y, 1};
-    Mat my_m = Mat(point);
-    Mat res = rotated_matrix* my_m;
-    outPoint.x= int(res.at<double>(0, 0));
-    outPoint.y= int(res.at<double>(0, 1));
+    Mat point = (Mat_<double>(3, 1) << inPoint.x, inPoint.y, 1.0);
+    Mat res = rotated_matrix * point;
+    outPoint.x = int(res.at<double>(0, 0));
+    outPoint.y = int(res.at<double>(1, 0));
     return outPoint;
 }
+
 
 
 
 int main(int argc, char** argv)
 {
     //![load]
-    const char* filename = argc >=2 ? argv[1] : "/home/user/CLionProjects/realsense-opencv/image/box3.jpg";
+    const char* filename = argc >=2 ? argv[1] : "/home/user/CLionProjects/realsense-opencv/image/box5.jpg";
 
     // Loads an image
     Mat src = imread( samples::findFile( filename ), IMREAD_COLOR );
