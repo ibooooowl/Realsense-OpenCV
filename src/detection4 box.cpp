@@ -142,8 +142,9 @@ int main(int argc, char** argv)
 
     // get the radius of the detected circles and their occurrences.
     std::map<int,int> radius_map;
-    for(auto && i : circles) {
-        int radius = int(i[2]);
+    for(auto && point : circles) {
+        Vec3i point_p = point;
+        int radius = point_p[2];
         if(radius_map.count(radius)<1){
             radius_map.emplace(radius, 1);
         }else{
@@ -157,7 +158,7 @@ int main(int argc, char** argv)
 
     // threshold to adjust the performance of proposed algorithm.
     int threshold_radius = 10;
-    double dist_threshold=20;
+    double dist_threshold = 15;
 
     // select the radius of hough circles by their occurrences not less than a given threshold.
     std::set<int> select_radius;
@@ -175,12 +176,13 @@ int main(int argc, char** argv)
     // the map to record the captured hough circles by created rectangle at different rotated angle.
     std::map<int, int> angle_count_map;
 
-    // we rotate 360 degree, each time 0.5 degree
-    for(int angle=0; angle< 360; angle++){
+    // we rotate 90 degree for a rectangle, each time 0.1 degree
+    Vec3i point_first = circles[0];
+    Point center_first = Point(point_first[0],point_first[1]);
+    for(int i=0; i< 900; i++){
+        double angle = i/10.0;
         // using getRotationMatrix2D() to get the rotation matrix
-        Mat rotation_matrix = getRotationMatrix2D(center_img, angle/2.0, 1.0);
-        // get the first hough circles.
-        Point center_first = Point(int(circles[0][0]),int(circles[0][1]));
+        Mat rotation_matrix = getRotationMatrix2D(center_img, angle, 1.0);
         // get the corresponding rotated point of the first hough circles.
         Point center_p_first = rotateBy(center_first, rotation_matrix);
         // initialize the value of x_min, y_min, x_max, y_max.
@@ -190,15 +192,16 @@ int main(int argc, char** argv)
         int y_max = center_p_first.y;
         // iterate all detected hough circles, get their rotated one by the given rotated angle,
         // then update the x_min, y-Min, x_max, y_max
-        for(const auto & i : circles)
+        for(const auto & point : circles)
         {
+            Vec3i point_p = point;
             // get the radius of the corresponding center point.
-            int radius = int(i[2]);
+            int radius = point_p[2];
             // if the radius is in the selected radius set, then update x_min, y_min, x_max, y_max.
             // otherwise, these hough circles could be the noise.
             if((select_radius.count(radius)>0)) {
                 // get the center point of detected hough circle.
-                Point center = Point(int(i[0]), int(i[1]));
+                Point center = Point(point_p[0], point_p[1]);
                 // get the rotated center point.
                 Point center_p = rotateBy(center, rotation_matrix);
                 // update x_min, x_max
@@ -220,34 +223,46 @@ int main(int argc, char** argv)
 
         int counter= 0;
         // iterate the hough circles, count how many rotated hough circles can be captured by the constructed rectangle.
-        for(const auto & i : circles) {
-            Vec3i c = i;
-            Point center = Point(c[0], c[1]);
+        for(const auto & point : circles) {
+            Vec3i point_p = point;
+            Point center = Point(point_p[0],  point_p[1]);
             Point center_p = rotateBy(center, rotation_matrix);
-            if(select_radius.count(c[2])>0 && onRectangleW(Point(x_min, y_min), Point(x_max, y_max), center_p, dist_threshold)>0){
+            //if(select_radius.count(point_p[2])>0 && onRectangleW(Point(x_min, y_min), Point(x_max, y_max), center_p, dist_threshold)>0){
+            if(onRectangleW(Point(x_min, y_min), Point(x_max, y_max), center_p, dist_threshold)>0){
                 counter++;
             }
         }
         // update the map of rotated angle and their captured hough circles.
-        angle_count_map.emplace(angle, counter);
+        angle_count_map.emplace(i, counter);
     }
 
     // transform the involved map into the vector in order to sort it.
     std::vector<std::pair<int, int>> angle_count_list(angle_count_map.begin(), angle_count_map.end());
-    // sort the vector non-decreasing by the number of captured hough circles.
-    std::sort(angle_count_list.begin(), angle_count_list.end(), [] (const std::pair<int,int>& a, const std::pair<int,int>& b)->bool{ return a.second > b.second; });
+    // sort the vector non-decreasing first by the number of captured hough circles.
+    // secondly by the non-increasing of rotation angle.
+    std::sort(angle_count_list.begin(), angle_count_list.end(), [] (const std::pair<int,int>& a, const std::pair<int,int>& b)->bool{ if(a.second > b.second) return true; else if (a.second < b.second) return false; else return a.first < b.first; });
 
     // display the rotated angle, and the number of captured hough circles.
     for (auto&& ele: angle_count_list) {
-        std::cout << ele.first/2.0 << "->" <<ele.second << std::endl;
+        std::cout << ele.first/10.0 << "->" <<ele.second << std::endl;
     }
     // the optimal rotated angle is the one has the largest number of captured hough circles by the constructed rectangle.
-    int angle_opt = angle_count_list[0].first;
+    int radius_opt= angle_count_list[0].second;
+    bool find=false;
+    int i_ter = 0;
+    while(!find){
+        if(angle_count_list[i_ter].second!=radius_opt){
+            find = true;
+        }else{
+            i_ter++;
+        }
+    }
+    double angle_opt = (angle_count_list[int(i_ter/2)].first)/10.0;
 
     // we then rotate the image by the associate angle to get the correct view of image.
 
     // using getRotationMatrix2D() to get the rotation matrix
-    Mat rotation_matrix_opt = getRotationMatrix2D(center_img, angle_opt/2.0, 1.0);
+    Mat rotation_matrix_opt = getRotationMatrix2D(center_img, angle_opt, 1.0);
     // we will save the resulting image in rotated_image matrix
     Mat rotated_image_opt;
     // rotate the image using warpAffine
@@ -257,21 +272,22 @@ int main(int argc, char** argv)
 
     // draw the detected hough circles in rotated image and also the constructed rectangle.
     // initialize the value of x_min_p, y_min_p, x_max_p, y_max_p.
-    Point first = rotateBy(Point(int(circles[0][0]), int(circles[0][1])), rotation_matrix_opt);
-    int x_min_p = int(first.x);
-    int x_max_p = int(first.x);
-    int y_min_p = int(first.y);
-    int y_max_p = int(first.y);
+    Point first = rotateBy(center_first, rotation_matrix_opt);
+    int x_min_p =  first.x;
+    int x_max_p = first.x;
+    int y_min_p = first.y;
+    int y_max_p = first.y;
     // circle(rotated_image, first, 70, Scalar(255, 255, 255), 6, LINE_AA);
     // iterate all the detected hough circles.
-    for(const auto & i : circles)
+    for(const auto & point : circles)
     {
         // get the center point of hough circle.
-        Point center = Point(int(i[0]), int(i[1]));
+        Vec3i point_p= point;
+        Point center = Point(point_p[0], point_p[1]);
         // get the rotated center point in the rotated image.
         Point center_p = rotateBy(center, rotation_matrix_opt);
         // circle outline
-        int radius = int(i[2]);
+        int radius = point_p[2];
         // draw the detected hough circles in the rotated image.
         circle( rotated_image_opt, center_p, radius, Scalar(0,0,255), 3, LINE_AA);
         // if radius is in the selected radius set, then draw it and update the x_min_p,y_min_p,x_max_p,y_max_p.
@@ -303,14 +319,15 @@ int main(int argc, char** argv)
     std::vector<Point> edge_c;
     std::vector<Point> edge_d;
     // iterate the detected hough circles.
-    for(const auto & i : circles) {
+    for(const auto & point : circles) {
         // get the center point of the hough circle.
-        Point center = Point(int(i[0]), int(i[1]));
+        Vec3i point_p = point;
+        Point center = Point(point_p[0], point_p[1]);
         // get the rotated center point.
         Point center_p = rotateBy(center, rotation_matrix_opt);
         // detect whether capture by the constructed rectangle.
         int code = onRectangleW(Point(x_min_p, y_min_p), Point(x_max_p, y_max_p), center_p, dist_threshold);
-        //if(select_radius.count(int(c[2]))>0 && code >0){
+        //if(select_radius.count(point_p[2])>0 && code >0){
         // extract the code by the capture function.
         if(code >0){
             circle( rotated_image_opt, center_p, 60, Scalar(0,255,0), 10, LINE_AA);
@@ -393,7 +410,7 @@ int main(int argc, char** argv)
     std::cout << "edge_a:" << edge_a.size() << ", edge_b:" << edge_b.size() <<", edge_c:" << edge_c.size() <<", edge_d:" << edge_d.size() <<std::endl;
 
     std::cout << "rotated: "<< counter_p << std::endl;
-    std::cout << "angle: "<< angle_opt/2.0 << std::endl;
+    std::cout << "angle: "<< angle_opt<< std::endl;
     Mat rotated_image_opt_p;
     // if the vertical minimum distance is less than the horizontal one, the rotated the image by 90 degree.
     // otherwise, it is in correct postion.
@@ -406,18 +423,15 @@ int main(int argc, char** argv)
         rotated_image_opt_p = rotated_image_opt;
     }
     // display the instruction of rotation.
-    double real_rotation =  min_distance_height < min_distance_width ? angle_opt/2.0+90: angle_opt/2.0;
-    if(real_rotation > 360){
-        real_rotation -= 360;
-    }
+    double real_rotation =  min_distance_height < min_distance_width ? angle_opt+90: angle_opt;
 
-    std::cout << "real rotate angle: clock_wise "<< (real_rotation> 180? 360-real_rotation: -real_rotation) << "°" << std::endl;
+    std::cout << "real rotate angle: clock_wise "<< (real_rotation> 90? 180-real_rotation: -real_rotation) << "°" << std::endl;
 
     // display the correct image.
-    Size newSize(src.cols/5, src.rows/5);
+    Size newSize(src.cols/3, src.rows/3);
     resize(rotated_image_opt_p, rotated_image_opt_p, newSize);
 
-    imshow("Rotated image by clockwise of "+ std::to_string((real_rotation> 180? 360-real_rotation: -real_rotation) )+ "°" , rotated_image_opt_p);
+    imshow("Rotated image by clockwise of "+ std::to_string((real_rotation> 90? 180-real_rotation: -real_rotation) )+ "±"+std::to_string(i_ter/20.0)+"°" , rotated_image_opt_p);
     //![display]
     waitKey();
     return EXIT_SUCCESS;
